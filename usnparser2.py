@@ -4,6 +4,10 @@ import sys
 import urllib.request
 from bs4 import BeautifulSoup
 
+import os
+import shutil
+import datetime
+
 usn_url = "https://www.ubuntu.com/usn/"
 usn_default_no = 'usn-3172-1'  # USN番号を指定
 usn_sample_html = 'ubuntu.html'
@@ -39,13 +43,32 @@ def get_cve_priority(href):
 # 一番高いレベルのPriorityを返す
 def get_hieghest_priority(priorities):
     if 'High' in priorities:
-        return 'High'
+        return '高'
     elif 'Medium' in priorities:
-        return 'Medium'
+        return '中'
     elif 'Low' in priorities:
-        return 'Low'
+        return '低'
     else:
         return 'None'
+
+# ファイルリストの順にファイルをカンマ区切りで内容をstrに結合
+def unite_file(usn_no, dirname, filelist):
+
+    csvstr = usn_no+ ","
+    for filename in filelist:
+        csvstr = csvstr + '"'
+
+        if filename != "":
+            f = open(dirname + filename,'r')
+            lines2 = f.readlines()
+            f.close()
+            for line in lines2:
+                 csvstr = csvstr +line
+        
+        csvstr = csvstr + '"' + ','
+
+    return csvstr
+
 
 # main
 if __name__ == '__main__':
@@ -56,40 +79,49 @@ if __name__ == '__main__':
     soup = get_soup(usn_url + usn_no)
     #soup = get_soup(usn_sample_html)
 
+
+    # 作業ディレクトリの作成
+    topdir = os.getcwd()
+    usndir = topdir + '\\' + usn_no + '\\'
+    if not os.path.exists(usndir):
+        os.mkdir(usndir)
+
     # 各項目の取得
 
     # 通知日
     h2 = soup.find('h2')
-    print('Date:')
-    print(h2.find_next_sibling('p').text)
+    f = open(usndir + "Date.txt",'w')
+    f.write(h2.find_next_sibling('p').text + '\n')
+    f.close()
 
-    #対象Ubuntu版数
+    # 対象Ubuntu版数
     h3 = soup.find('h3')    
     ul = h3.find_next_sibling('ul')
     lis = ul.find_all('li')
-    print('Ubuntu version:')
+    f = open(usndir + "Ubuntu_version.txt",'w')
     for li in lis:
-        print(li.text)
+        f.write(li.text + '\n')
+    f.close()
 
     for h3 in soup.find_all('h3'):
         # Details
         title = h3.text
         if title == 'Details':
-            print('Details:')
-#            print(h3.find_next_sibling('p').text)
+            f = open(usndir + "Details.txt",'w')
             # next_siblingだと改行(\n)がヒットしてしまうので次の<p>を探す
-
             p = h3
             while  True:
                 p = p.find_next_sibling('p')
                 if p.text == detail_text:
                     break
-                print(p.text + '\n')
+                f.write(p.text + '\n')
+            f.close()
 
-        #Update instructions
+        # Update instructions
         elif title == 'Update instructions':
-            print('Update instructions:')
-            
+            fp = open(usndir + "Package.txt",'w')
+            fpv = open(usndir + "Package_version.txt",'w')
+
             # <dl>の中に<dt>でUbuntuバージョン、さらに<dd>のなかに対象パッケージとバージョンがリストになっている
             # <dl>
             #     <dt>Ubuntuバージョン</dt>
@@ -101,28 +133,62 @@ if __name__ == '__main__':
             # </dl>            
             dls = h3.find_next_sibling('dl')
             lists = dls.find_all([ 'dt' , 'a' ])
+            num = 1
             for a in lists:
-                print(a.text)
-                # パッケージ名
-                # バージョン
-                # の繰り返し形で表示
+                if  'Ubuntu ' in a.text:
+                    fp.write(a.text + '\n')
+                    fpv.write(a.text + '\n')
+                    num = 1
+                else:
+                    if num %2 == 1:
+                        #パッケージだけをファイルにまとめる
+                        fp.write(a.text + '\n')
+                        num += 1
+                    else:
+                        #パッケージバージョンだけをファイルにまとめる
+                        fpv.write(a.text + '\n')
+                        num += 1
+            fp.close()
+            fpv.close()
+            
 
-        # References
+        # CVE_number (References)
         elif title == 'References':
-            print('References:')
+            f = open(usndir + "CVE_number.txt",'w')
             p = h3.find_next_sibling('p')
             # <p>の中にCVEへのリンクがリストになっている
             priorities = []
             for a in p.find_all('a'):
-                print(a.text)
+                f.write(a.text + '\n')
                 #print(a.get('href'))  # URL取得
                 priorities.append(get_cve_priority(a.get('href')))  # CVE優先度
+            f.close()
 
         # Priority
-            print ('Priority:')
-            print(get_hieghest_priority(priorities))
+            f = open(usndir + "Priority.txt",'w')
+            f.write(get_hieghest_priority(priorities) + '\n')
+            f.close()
 
         # Link
-            print('Link:')
-            print(usn_url + usn_no)
-        
+            f = open(usndir + "Link.txt",'w')
+            f.write(usn_url + usn_no + '\n')
+            f.close()
+
+    ##### ファイル編集
+
+    filelist = ['Date.txt', 'Ubuntu_version.txt', 'Package.txt', '', 'Package_version.txt', 'CVE_number.txt', 'Priority.txt', 'Details.txt', '', 'Link.txt']
+    csvstr = unite_file(usn_no, usndir, filelist)
+
+    # 保存ディレクトリの作成
+    date = str(datetime.date.today())
+    savedir = topdir + '\\' + date +'\\' + 'tmp\\'
+    if not os.path.exists(savedir):
+        os.makedirs(savedir)
+
+    f = open(savedir + usn_no + '.txt', 'w')
+    f.write(csvstr)
+    f.close()
+
+
+    # 作業ディレクトリの削除
+    shutil.rmtree(usndir)
