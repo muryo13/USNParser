@@ -47,6 +47,11 @@ if __name__ == '__main__':
         fm.write('\n')
         f.close()
     fm.close()
-        
-    os.rename(tmpdir + 'merge.txt', savedir + date + '.csv')
+
+    save_csv = savedir + date + '.csv'
+    if os.path.isfile(save_csv):
+        filenum = len(os.listdir(savedir))
+        os.rename(save_csv, save_csv + '_' + str(filenum - 1))
+
+    os.rename(tmpdir + 'merge.txt', save_csv)
     

@@ -12,6 +12,8 @@ usn_url = "https://www.ubuntu.com/usn/"
 usn_default_no = 'usn-3172-1'  # USN番号を指定
 usn_sample_html = 'ubuntu.html'
 
+package_list = "package_list_test.txt"  # パッケージリストファイルを指定
+
 detail_text=' The problem can be corrected by updating your system to the following\npackage version:'
 
 # soupを取得
@@ -51,8 +53,62 @@ def get_hieghest_priority(priorities):
     else:
         return 'None'
 
+# 日付変換
+def convert_date_format(datestr):
+
+    # 序数表記削除    
+    if '1st' in datestr:
+        datestr = datestr.replace("1st","1")
+    elif 'nd' in datestr:
+        datestr = datestr.replace("nd","")
+    elif 'rd' in datestr:
+        datestr = datestr.replace("rd","")
+    elif 'th' in datestr:
+        datestr = datestr.replace("th","")
+
+    # 文字列→日付
+    tmpdate = datetime.datetime.strptime(datestr, '%d %B, %Y')
+    # 日付→文字列
+    datestr = tmpdate.strftime("%Y/%m/%d")   
+
+    return datestr
+
+# アップデート対象かどうかを判定
+def check_list(usndir):
+
+    ret_str = "×"
+    f = open(usndir + "Ubuntu_version.txt",'r')
+    u_ver = f.readlines()
+    f.close()
+    
+    # Ubuntuバージョンチェック
+    if 'Ubuntu 14.04 LTS\n' in u_ver:
+        ret_str = "○"
+    else:
+        return ret_str    # "×"
+
+    # 搭載パッケージチェック
+
+    f = open(package_list ,'r')
+    p_list = f.readlines()     # 搭載パッケージリスト取得
+    f.close()
+  
+    f = open(usndir + "Package.txt",'r')
+    u_list = f.readlines()    # アップデートパッケージリスト取得
+    f.close()
+
+    for update_package in u_list:
+        if update_package in p_list:
+            ret_str = "○"
+            break
+        else:
+            ret_str = "×"
+    
+    return ret_str
+
+
 # ファイルリストの順にファイルをカンマ区切りで内容をstrに結合
-def unite_file(usn_no, dirname, filelist):
+def marge_files(usn_no, dirname, filelist):
 
     csvstr = usn_no+ ","
     for filename in filelist:
@@ -83,15 +139,19 @@ if __name__ == '__main__':
     # 作業ディレクトリの作成
     topdir = os.getcwd()
     usndir = topdir + '\\' + usn_no + '\\'
-    if not os.path.exists(usndir):
-        os.mkdir(usndir)
+    if os.path.exists(usndir):
+        print("既に存在します :" + usn_no)
+        sys.exit(1)        
+    os.mkdir(usndir)
 
     # 各項目の取得
 
     # 通知日
     h2 = soup.find('h2')
+    datestr = h2.find_next_sibling('p').text
+    datestr = convert_date_format(datestr)
     f = open(usndir + "Date.txt",'w')
-    f.write(h2.find_next_sibling('p').text + '\n')
+    f.write(datestr + '\n')
     f.close()
 
     # 対象Ubuntu版数
@@ -112,7 +172,11 @@ if __name__ == '__main__':
             p = h3
             while  True:
                 p = p.find_next_sibling('p')
+                if p is None:
+                    # 見つからなかったら抜ける
+                    break
                 if p.text == detail_text:
+                    # Detailsが終わったら抜ける
                     break
                 f.write(p.text + '\n')
             f.close()
@@ -174,10 +238,18 @@ if __name__ == '__main__':
             f.write(usn_url + usn_no + '\n')
             f.close()
 
+    # Update対象チェック
+
+    check = check_list(usndir)
+    f = open(usndir + "check.txt",'w')
+    f.write(check + '\n')
+    f.close()
+    
+
     ##### ファイル編集
 
-    filelist = ['Date.txt', 'Ubuntu_version.txt', 'Package.txt', '', 'Package_version.txt', 'CVE_number.txt', 'Priority.txt', 'Details.txt', '', 'Link.txt']
-    csvstr = unite_file(usn_no, usndir, filelist)
+    filelist = ['Date.txt', 'Ubuntu_version.txt', 'Package.txt', 'check.txt', 'Package_version.txt', 'CVE_number.txt', 'Priority.txt', 'Details.txt', '', 'Link.txt']
+    csvstr = marge_files(usn_no, usndir, filelist)
 
     # 保存ディレクトリの作成
     date = str(datetime.date.today())
