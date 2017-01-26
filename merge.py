@@ -1,7 +1,14 @@
 #coding: UTF-8
 
-import sys
+#
+#  merge.py
+#
+#   usage: merge.py [dir]
+#       ex) merge.py
+#       ex) merge.py D:\testdir
+#
 
+import sys
 import os
 import csv
 import datetime
